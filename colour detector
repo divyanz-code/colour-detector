@@ -1,0 +1,117 @@
+import cv2
+import numpy as np
+
+def detect_object_color(frame):
+    """
+    Detect the color of the main object in the frame
+    """
+    # Convert BGR to HSV
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+    # Define color ranges in HSV
+    color_ranges = {
+        'Red': [
+            (np.array([0, 100, 100]), np.array([10, 255, 255])),
+            (np.array([160, 100, 100]), np.array([180, 255, 255]))
+        ],
+        'Green': [(np.array([40, 100, 100]), np.array([80, 255, 255]))],
+        'Blue': [(np.array([100, 100, 100]), np.array([130, 255, 255]))],
+        'Yellow': [(np.array([20, 100, 100]), np.array([30, 255, 255]))],
+        'Orange': [(np.array([10, 100, 100]), np.array([20, 255, 255]))],
+        'Purple': [(np.array([130, 100, 100]), np.array([160, 255, 255]))],
+        'Pink': [(np.array([140, 100, 100]), np.array([160, 255, 255]))],
+        'Cyan': [(np.array([80, 100, 100]), np.array([100, 255, 255]))]
+    }
+    
+    best_color = None
+    best_confidence = 0
+    best_bbox = None
+    
+    # Check each color
+    for color_name, ranges in color_ranges.items():
+        for lower, upper in ranges:
+            # Create mask for this color
+            mask = cv2.inRange(hsv, lower, upper)
+            
+            # Find contours
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                if area > 300:  # Minimum size
+                    x, y, w, h = cv2.boundingRect(contour)
+                    
+                    # Calculate color confidence
+                    roi = mask[y:y+h, x:x+w]
+                    confidence = (np.sum(roi > 0) / (w * h)) * 100
+                    
+                    # Update best detection
+                    if confidence > best_confidence:
+                        best_confidence = confidence
+                        best_color = color_name
+                        best_bbox = (x, y, w, h)
+    
+    return best_color, best_confidence, best_bbox
+
+def draw_detection(frame, color, confidence, bbox):
+    """
+    Draw the detection result on frame
+    """
+    if bbox is not None:
+        x, y, w, h = bbox
+        
+        # Draw box around object
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
+        
+        # Draw color label
+        label = f"Color: {color}"
+        cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+        # Draw confidence
+        conf_label = f"Confidence: {confidence:.1f}%"
+        cv2.putText(frame, conf_label, (x, y + h + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+def main():
+    # Start camera
+    cap = cv2.VideoCapture(0)
+    
+    if not cap.isOpened():
+        print("Camera not found!")
+        return
+    
+    print("Object Color Detection Started!")
+    print("Show any object to the camera")
+    print("Press 'q' to quit")
+    
+    while True:
+        # Read frame
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Flip frame for mirror effect
+        frame = cv2.flip(frame, 1)
+        
+        # Detect color
+        color, confidence, bbox = detect_object_color(frame)
+        
+        # Draw result
+        if color and confidence > 30:
+            draw_detection(frame, color, confidence, bbox)
+            
+            # Print color in console
+            print(f"Detected Color: {color} (Confidence: {confidence:.1f}%)")
+        
+        # Show frame
+        cv2.imshow('Object Color Detection', frame)
+        
+        # Check for key press
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    
+    # Clean up
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
